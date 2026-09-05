@@ -1,0 +1,21 @@
+{
+  "name": "ly-c100a-dashboard-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend: sondeo de Tuya Cloud API, historial local y API REST + Socket.IO",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "firebase-admin": "^13.0.0",
+    "socket.io": "^4.8.1"
+  },
+  "optionalDependencies": {}
+}

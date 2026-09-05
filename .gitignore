@@ -1,0 +1,23 @@
+# Dependencias
+node_modules/
+.npm-cache/
+
+# Compilación frontend
+web/dist/
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Datos locales (historial de mediciones)
+data/
+*.ndjson
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema
+.DS_Store
+Thumbs.db

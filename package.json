@@ -1,0 +1,26 @@
+{
+  "name": "ly-c100a-energy-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashboard web en tiempo real para medidor inteligente Tuya WiFi LY-C100A (Tuya Cloud API + sync Supabase/Firebase)",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,green \"npm run dev -w server\" \"npm run dev -w web\"",
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "start": "npm run start -w server",
+    "demo": "cross-env TUYA_DEMO=1 npm run start -w server",
+    "demo:dev": "cross-env TUYA_DEMO=1 concurrently -n server,web -c cyan,green \"npm run dev -w server\" \"npm run dev -w web\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}

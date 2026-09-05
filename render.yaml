@@ -1,0 +1,42 @@
+# ============================================================
+#  Render Blueprint — LY-C100A Energy Dashboard
+#  (alternativa a crear el servicio a mano desde el dashboard)
+#  Render inyecta PORT automáticamente; el backend lo respeta.
+#
+#  SECRETOS: tras desplegar, define en Render → Environment:
+#    TUYA_CLIENT_ID · TUYA_CLIENT_SECRET · TUYA_DEVICE_ID
+#    SYNC_SUPABASE_URL · SYNC_SUPABASE_SERVICE_KEY
+#    SYNC_FIREBASE_SERVICE_ACCOUNT  (JSON completo o Base64)
+# ============================================================
+services:
+  - type: web
+    name: ly-c100a-dashboard
+    runtime: node
+    plan: free
+    region: frankfurt          # oregon si el proyecto Tuya/meter está en América
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TUYA_REGION
+        value: us               # región del centro de datos habilitado en iot.tuya.com
+      - key: TUYA_POLL_INTERVAL_MS
+        value: "10000"
+      - key: TUYA_ENERGY_SCALE
+        value: "1"
+      # Los valores de estas claves se completan en el dashboard de Render:
+      #   - key: TUYA_CLIENT_ID
+      #     sync: false
+      #   - key: TUYA_CLIENT_SECRET
+      #     sync: false
+      #   - key: TUYA_DEVICE_ID
+      #     sync: false
+      #   - key: SYNC_SUPABASE_URL
+      #     sync: false
+      #   - key: SYNC_SUPABASE_SERVICE_KEY
+      #     sync: false
+      #   - key: SYNC_FIREBASE_SERVICE_ACCOUNT
+      #     sync: false
