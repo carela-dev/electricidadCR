@@ -61,9 +61,11 @@ create or replace function public.readings_bucketed(
   order by bucket;
 $$;
 
--- Permisos: el backend escribe con la clave service_role (RLS no aplica).
--- Si quieres exponer lecturas a clientes anónimos, activa RLS con una
--- política de solo lectura, por ejemplo:
---   alter table public.readings enable row level security;
+-- Permisos: el backend escribe con la clave service_role (omite RLS).
+-- Activamos RLS SIN políticas públicas: los clientes anónimos no pueden leer.
+alter table public.readings enable row level security;
+
+-- (Opcional) Si algún día quieres exponer lecturas de solo lectura a clientes
+-- anónimos vía PostgREST/anon key, descomenta:
 --   create policy readings_read on public.readings
 --     for select using (true);
