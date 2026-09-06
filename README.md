@@ -153,6 +153,25 @@ Particularidades de estos dispositivos:
 El archivo `.env` puede vivir en la raíz del repo, en `server/` o en el cwd; el backend lo
 localiza solo.
 
+## 5.1 Varias casas (TUYA_DEVICES) y acceso por PIN
+
+Con el mismo proyecto de Tuya (misma cuenta/app y mismas credenciales) puedes vigilar
+**varias casas** definiendo la variable `TUYA_DEVICES` (JSON):
+
+```jsonc
+// .env (una línea) o variable de Render
+TUYA_DEVICES=[{"id":"casa4","name":"Casa 4","deviceId":"eb7be0c43951c24d39olwx","pin":"1111"},
+              {"id":"casa2","name":"Casa 2","deviceId":"<device_id_del_otro_breaker>","pin":"2222"}]
+```
+
+- Cada casa recibe su **sondeo independiente**, su **historial** (`data/<id>.ndjson`) y su estado.
+- `pin` (opcional) **bloquea la casa**: los endpoints de datos y el canal en vivo exigen ese PIN
+  (cabeceras `X-House-Id` / `X-House-Pin`), de modo que cada dueño solo ve su casa.
+- La interfaz muestra un **selector de casas** en la cabecera; cada navegador desbloquea las
+  suyas con su PIN (queda recordado en ese dispositivo).
+- Supabase no cambia: las filas de todas las casas conviven en `readings` separadas por
+  `device_id`.
+
 ## 6. Sincronización opcional hacia Supabase o Firebase
 
 La sync se activa sola al definir las variables correspondientes; cada lectura se escribe en

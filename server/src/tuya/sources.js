@@ -77,21 +77,21 @@ const DEMO_CODES = [
   'cur_current', 'cur_power', 'cur_power_factor', 'add_ele', 'temperature',
 ];
 
-export function createDemoSource({ deviceId = 'ly-c100a-demo', log } = {}) {
+export function createDemoSource({ deviceId = 'ly-c100a-demo', name = 'Casa demo', log, phaseShift = 0 } = {}) {
   let energy = 1024.37; // kWh acumulado inicial (simulado)
   let lastTs = null;
 
   const meta = {
     id: deviceId,
-    name: 'LY-C100A (simulación)',
-    product_name: 'Medidor de energía WiFi 2 fases · demo',
+    name,
+    product_name: 'Medidor de energía WiFi · demo',
     category: 'kg',
     model: 'LY-C100A',
     online: true,
   };
 
   const generate = (ts, dtSeconds) => {
-    const s = ts / 1000;
+    const s = ts / 1000 + phaseShift;
     // Tensión nominal 230 V con deriva lenta + ondulación de red por fase.
     const drift = 1.5 * Math.sin(s / 900) + 0.6 * Math.sin(s / 240 + 1.2);
     const v1 = 230.4 + drift + 0.9 * Math.sin(s / 31 + 0.4) + noise(0.1);

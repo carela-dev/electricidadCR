@@ -38,6 +38,7 @@ const toNum = (v, fallback) => {
 };
 const toBool = (v, fallback = false) =>
   v === undefined || v === null ? fallback : /^(1|true|yes|on)$/i.test(String(v));
+const clean = (v) => String(v || '').trim();
 
 /** Dominios públicos de la Open API de Tuya por región. */
 export const TUYA_BASE_URLS = {
@@ -50,10 +51,11 @@ export const TUYA_BASE_URLS = {
 export const config = {
   port: toNum(process.env.PORT, 4000),
 
+  // Credenciales globales (una cuenta de Tuya = un proyecto cloud)
   region: String(process.env.TUYA_REGION || 'eu').toLowerCase(),
-  tuyaClientId: process.env.TUYA_CLIENT_ID || process.env.TUYA_ACCESS_ID || '',
-  tuyaSecret: process.env.TUYA_CLIENT_SECRET || process.env.TUYA_ACCESS_SECRET || '',
-  tuyaDeviceId: (process.env.TUYA_DEVICE_ID || '').trim(),
+  tuyaClientId: clean(process.env.TUYA_CLIENT_ID || process.env.TUYA_ACCESS_ID),
+  tuyaSecret: clean(process.env.TUYA_CLIENT_SECRET || process.env.TUYA_ACCESS_SECRET),
+  tuyaDeviceId: clean(process.env.TUYA_DEVICE_ID),
 
   demo: toBool(process.env.TUYA_DEMO),
   pollIntervalMs: Math.max(3000, toNum(process.env.TUYA_POLL_INTERVAL_MS, 10000)),
@@ -61,21 +63,89 @@ export const config = {
 
   dataDir: process.env.DATA_DIR || path.join(SERVER_ROOT, 'data'),
   retentionDays: Math.max(1, toNum(process.env.HISTORY_RETENTION_DAYS, 7)),
-  historyFile: path.join(process.env.DATA_DIR || path.join(SERVER_ROOT, 'data'), 'readings.ndjson'),
 
-  syncSupabaseUrl: (process.env.SYNC_SUPABASE_URL || '').trim(),
-  syncSupabaseKey: process.env.SYNC_SUPABASE_SERVICE_KEY || process.env.SYNC_SUPABASE_KEY || '',
+  syncSupabaseUrl: clean(process.env.SYNC_SUPABASE_URL),
+  syncSupabaseKey: clean(process.env.SYNC_SUPABASE_SERVICE_KEY || process.env.SYNC_SUPABASE_KEY),
   syncSupabaseTable: process.env.SYNC_SUPABASE_TABLE || 'readings',
 
-  firebaseServiceAccount: (process.env.SYNC_FIREBASE_SERVICE_ACCOUNT || '').trim(),
+  firebaseServiceAccount: clean(process.env.SYNC_FIREBASE_SERVICE_ACCOUNT),
   firebaseCollection: process.env.SYNC_FIREBASE_COLLECTION || 'readings',
 
   webDist: process.env.WEB_DIST || path.join(REPO_ROOT, 'web', 'dist'),
   corsOrigin: process.env.CORS_ORIGIN || '',
 };
 
-/** ¿Hay credenciales Tuya suficientes para sondear el dispositivo? */
-export const isTuyaConfigured = () =>
-  Boolean(config.tuyaClientId && config.tuyaSecret && config.tuyaDeviceId);
+/** Región efectiva por dispositivo (o la global). */
+const regionOf = (d) => String(d.region || config.region).toLowerCase();
 
-export const tuyaBaseUrl = () => TUYA_BASE_URLS[config.region] || TUYA_BASE_URLS.eu;
+/**
+ * Registro de casas/medidores. Cada entrada:
+ *   { id, name, deviceId, pin?, clientId?, secret?, region? }
+ * Se define con la variable TUYA_DEVICES (JSON) — útil para varias casas.
+ * Si no existe, se mantiene el modo clásico de un solo dispositivo.
+ */
+export function resolveDevices() {
+  const raw = clean(process.env.TUYA_DEVICES);
+  if (raw) {
+    let list;
+    try {
+      list = JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`TUYA_DEVICES no es un JSON válido: ${err.message}`);
+    }
+    if (!Array.isArray(list) || !list.length) {
+      throw new Error('TUYA_DEVICES debe ser un array con al menos una casa');
+    }
+    return list.map((d, i) => ({
+      id: clean(d.id || d.house || `casa${i + 1}`),
+      name: clean(d.name || `Casa ${i + 1}`),
+      deviceId: clean(d.deviceId || d.device_id),
+      pin: clean(d.pin ?? d.key ?? d.pin_code),
+      clientId: clean(d.clientId || d.accessId),
+      secret: clean(d.secret || d.accessSecret),
+      region: regionOf(d),
+    }));
+  }
+
+  // Modo clásico de una sola casa (compatibilidad)
+  const id = config.demo
+    ? 'casa4'
+    : (config.tuyaDeviceId || 'default');
+  return [
+    {
+      id,
+      name: clean(process.env.TUYA_HOUSE_NAME) || 'Medidor',
+      deviceId: config.tuyaDeviceId,
+      pin: clean(process.env.TUYA_HOUSE_PIN),
+      clientId: '',
+      secret: '',
+      region: config.region,
+    },
+  ];
+}
+
+export const devices = resolveDevices();
+export const devicesById = new Map(devices.map((d) => [d.id, d]));
+
+/** Credenciales efectivas (propias de la casa o las globales). */
+export function credsFor(device) {
+  return {
+    clientId: device.clientId || config.tuyaClientId,
+    secret: device.secret || config.tuyaSecret,
+    baseUrl: TUYA_BASE_URLS[device.region] || TUYA_BASE_URLS.us,
+    region: device.region,
+  };
+}
+
+/** ¿Hay credenciales Tuya para sondear al menos una casa real? */
+export const isTuyaConfigured = () =>
+  devices.some((d) => {
+    const c = credsFor(d);
+    return Boolean(c.clientId && c.secret && d.deviceId);
+  });
+
+export function getDeviceById(id) {
+  return devicesById.get(id) || null;
+}
+
+export const tuyaBaseUrl = () => TUYA_BASE_URLS[config.region] || TUYA_BASE_URLS.us;

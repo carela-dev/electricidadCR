@@ -1,15 +1,36 @@
 /**
- * Cliente HTTP mínimo para la API del backend.
- * Todas las rutas son relativas: en desarrollo Vite las proxya al servidor.
+ * Cliente HTTP mínimo para la API del backend (multi-casa).
+ * Las rutas son relativas: en desarrollo Vite las proxya al servidor.
+ * Las peticiones de datos llevan la casa activa (X-House-Id) y su PIN
+ * (X-House-Pin) para el aislamiento entre casas.
  */
-async function getJSON(url, timeoutMs = 10000) {
+
+class ApiError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+async function getJSON(url, { house, pin, timeoutMs = 10000 } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const headers = { Accept: 'application/json' };
+  if (house) headers['X-House-Id'] = house;
+  if (pin) headers['X-House-Pin'] = pin;
   try {
-    const res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    const res = await fetch(url, { signal: controller.signal, headers });
+    if (res.status === 401) {
+      let text = '';
+      try {
+        text = (await res.json()).error || '';
+      } catch { /* sin cuerpo */ }
+      throw new ApiError(401, text || 'PIN incorrecto');
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}${text ? `: ${text.slice(0, 140)}` : ''}`);
+      throw new ApiError(res.status, `HTTP ${res.status}${text ? `: ${text.slice(0, 140)}` : ''}`);
     }
     const json = await res.json();
     if (json && json.ok === false) throw new Error(json.error || 'Error del servidor');
@@ -22,30 +43,36 @@ async function getJSON(url, timeoutMs = 10000) {
   }
 }
 
+/** Lista pública de casas. */
+export function fetchDevices() {
+  return getJSON('/api/devices').then((j) => j.houses || []);
+}
+
 export function fetchHealth() {
   return getJSON('/api/health');
 }
 
-export function fetchDevice() {
-  return getJSON('/api/device').then((j) => j.data);
+export function fetchDevice(access) {
+  return getJSON('/api/device', access).then((j) => j.data);
 }
 
-export function fetchStatus() {
-  return getJSON('/api/status').then((j) => j.data);
+export function fetchStatus(access) {
+  return getJSON('/api/status', access).then((j) => j.data);
 }
 
-export function fetchLatest() {
-  return getJSON('/api/latest').then((j) => j.data);
+export function fetchLatest(access) {
+  return getJSON('/api/latest', access).then((j) => j.data);
 }
 
 /**
- * Serie histórica.
- * @returns {Promise<{from:number,to:number,total:number,points:object[]}>}
+ * Serie histórica de una casa.
+ * access = { house, pin }.
+ * @returns {Promise<{house,from,to,total,points}>}
  */
-export function fetchHistory({ from, to, points = 600 }) {
+export function fetchHistory({ from, to, points = 600 }, access) {
   const qs = new URLSearchParams();
   qs.set('from', String(from));
   qs.set('to', String(to));
   qs.set('points', String(points));
-  return getJSON(`/api/history?${qs.toString()}`).then((j) => j.data);
+  return getJSON(`/api/history?${qs.toString()}`, access).then((j) => j.data);
 }

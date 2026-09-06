@@ -1,9 +1,11 @@
 /**
- * LY-C100A Energy Dashboard — composición principal.
+ * LY-C100A Energy Dashboard — composición principal (multi-casa).
  */
 import { useEffect, useState } from 'react';
 import useMeter from './hooks/useMeter.js';
 import Header from './components/Header.jsx';
+import HouseBar from './components/HouseBar.jsx';
+import PinModal from './components/PinModal.jsx';
 import MetricCards from './components/MetricCards.jsx';
 import VoltageChart from './components/VoltageChart.jsx';
 import PowerChart from './components/PowerChart.jsx';
@@ -26,12 +28,30 @@ function readTheme() {
 export default function App() {
   const [theme, setTheme] = useState(readTheme);
   const [now, setNow] = useState(() => Date.now());
+  const [pinHouse, setPinHouse] = useState(null); // casa esperando PIN
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinError, setPinError] = useState(null);
 
   const meter = useMeter();
-  const { device, status, latest, view, setView, series, prevPoint, histLoading, histError, histUpdatedAt, refreshHistory, socketConnected, seedError } = meter;
+  const {
+    houses, active, access, isUnlocked, unlockHouse, forgetPin, selectHouse,
+    device, status, latest, view, setView, series, prevPoint,
+    histLoading, histError, histUpdatedAt, refreshHistory,
+    socketConnected, seedError,
+  } = meter;
 
   const w = viewById(view);
   const live = w.live;
+
+  const activeHouse = houses.find((h) => h.id === active) || null;
+  const unlocked = houses.filter((h) => isUnlocked(h.id)).map((h) => h.id);
+  const lockedActive = Boolean(activeHouse && activeHouse.requiresPin && !isUnlocked(activeHouse.id));
+  const hasAccess = Boolean(access);
+
+  // `device` para la cabecera: cuando la casa está bloqueada no hay datos aún
+  const headerDevice =
+    device ||
+    (activeHouse ? { id: activeHouse.id, name: activeHouse.name, model: null, online: false, source: activeHouse.mode } : null);
 
   const phase2 = !device ? true : device.phase2 !== false;
   const phase3 = Boolean(device?.phase3);
@@ -59,19 +79,51 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  const sourceName = status?.mode === 'demo' ? 'Demo (simulación)' : status?.mode === 'tuya' ? 'Tuya Cloud API' : 'Sin configurar';
+  const sourceName =
+    status?.mode === 'demo' ? 'Demo (simulación)'
+      : status?.mode === 'tuya' ? 'Tuya Cloud API'
+        : activeHouse?.mode === 'none' ? 'Sin datos configurados'
+          : 'Sin configurar';
+
+  // ------------------------------------------------------------ interacción casa
+  const handleSelectHouse = (house) => {
+    selectHouse(house.id);
+    setPinError(null);
+    if (house.requiresPin && !isUnlocked(house.id)) setPinHouse(house);
+  };
+
+  const handleUnlock = async (pin) => {
+    if (!pinHouse) return;
+    setPinBusy(true);
+    setPinError(null);
+    try {
+      await unlockHouse(pinHouse.id, pin);
+      setPinHouse(null);
+    } catch (err) {
+      setPinError(err.status === 401 ? 'PIN incorrecto, inténtalo de nuevo.' : err.message);
+    } finally {
+      setPinBusy(false);
+    }
+  };
+
+  const requestUnlock = (house) => {
+    setPinError(null);
+    setPinHouse(house);
+  };
 
   return (
     <div className="app">
       <Header
-        device={device}
+        device={headerDevice}
         status={status}
         latest={latest}
-        socketConnected={socketConnected}
+        socketConnected={socketConnected && hasAccess}
         now={now}
         theme={theme}
         onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
       />
+
+      <HouseBar houses={houses} active={active} unlocked={unlocked} onSelect={handleSelectHouse} />
 
       {seedError && (
         <div className="banner err">
@@ -84,7 +136,27 @@ export default function App() {
         </div>
       )}
 
-      {status?.lastError && (
+      {!activeHouse && !seedError && (
+        <div className="banner info">
+          <AlertIcon size={16} />
+          <span>Cargando panel…</span>
+        </div>
+      )}
+
+      {lockedActive && !hasAccess && (
+        <div className="card lock-screen">
+          <span className="big-lock">🔒</span>
+          <h2 style={{ margin: '6px 0 0' }}>{activeHouse.name} está bloqueada</h2>
+          <p style={{ margin: '0 0 14px' }}>
+            Introduce el PIN de esta casa para ver sus mediciones en tiempo real.
+          </p>
+          <button type="button" className="btn primary" onClick={() => requestUnlock(activeHouse)}>
+            Desbloquear {activeHouse.name}
+          </button>
+        </div>
+      )}
+
+      {hasAccess && status?.lastError && (
         <div className="banner warn">
           <AlertIcon size={16} />
           <span>
@@ -95,7 +167,7 @@ export default function App() {
         </div>
       )}
 
-      {supplyOff && (
+      {hasAccess && supplyOff && (
         <div className="banner warn">
           <AlertIcon size={16} />
           <span>
@@ -150,6 +222,11 @@ export default function App() {
 
       <footer className="footer-note">
         <div className="left">
+          {activeHouse && (
+            <span>
+              Casa <code>{activeHouse.name}</code>
+            </span>
+          )}
           <span>
             Dispositivo <code>{device ? shortDeviceId(device.id) : '—'}</code>
           </span>
@@ -171,6 +248,21 @@ export default function App() {
           </span>
         </div>
       </footer>
+
+      {pinHouse && (
+        <PinModal
+          house={pinHouse}
+          error={pinError}
+          busy={pinBusy}
+          onSubmit={handleUnlock}
+          onClose={() => {
+            if (!pinBusy) {
+              setPinHouse(null);
+              setPinError(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
