@@ -65,6 +65,9 @@ export const config = {
   //  - al agotarse la cuota se espera este tiempo antes de reintentar
   detailEvery: Math.max(1, toNum(process.env.TUYA_DETAIL_EVERY, 60)),
   quotaBackoffMs: Math.max(60_000, toNum(process.env.TUYA_QUOTA_BACKOFF_MS, 900_000)),
+  // Nº de lecturas recientes que se recuperan de Supabase al arrancar
+  // (el disco de Render Free es efímero en cada despliegue/reinicio).
+  syncBackfillLimit: Math.max(100, toNum(process.env.SYNC_SUPABASE_BACKFILL_LIMIT, 5000)),
 
   dataDir: process.env.DATA_DIR || path.join(SERVER_ROOT, 'data'),
   retentionDays: Math.max(1, toNum(process.env.HISTORY_RETENTION_DAYS, 7)),

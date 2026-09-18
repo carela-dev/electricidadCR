@@ -148,6 +148,7 @@ Particularidades de estos dispositivos:
 | `SYNC_SUPABASE_URL` | — | URL del proyecto Supabase |
 | `SYNC_SUPABASE_SERVICE_KEY` | — | Clave `service_role` |
 | `SYNC_SUPABASE_TABLE` | `readings` | Tabla destino |
+| `SYNC_SUPABASE_BACKFILL_LIMIT` | `5000` | Lecturas que se recuperan de Supabase al arrancar (el disco de Render Free es efímero) |
 | `SYNC_FIREBASE_SERVICE_ACCOUNT` | — | Ruta al JSON de cuenta de servicio |
 | `SYNC_FIREBASE_COLLECTION` | `readings` | Colección Firestore |
 | `CORS_ORIGIN` | *(todos)* | Orígenes permitidos (separados por coma) |
@@ -201,6 +202,11 @@ new private key**.
 > 📌 Nota de arquitectura: la lectura de históricos del dashboard siempre se sirve desde el
 > **historial local del backend** (rápido y barato). Supabase/Firebase funcionan como **espejo
 > duradero** de las mediciones para análisis externos, alertas, Grafana, etc.
+
+- **Lectura de respaldo:** al arrancar (o si la cuota de Tuya se agota sin telemetría en
+  memoria), el backend recupera las últimas `SYNC_SUPABASE_BACKFILL_LIMIT` lecturas desde
+  Supabase, de modo que el panel y los gráficos nunca aparecen vacíos tras un reinicio o
+  redespliegue de Render.
 
 ## 7. API REST
 

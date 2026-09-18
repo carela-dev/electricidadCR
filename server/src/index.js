@@ -89,6 +89,29 @@ for (let i = 0; i < devices.length; i += 1) {
 const sync = await createSyncers(config, log);
 ctx.sync = sync;
 
+// ---------------------------------------------------------------- respaldo desde Supabase
+// El disco de Render Free es efímero: al reiniciar/desplegar se pierde el
+// historial local. Si Supabase está configurado, recuperamos las últimas
+// lecturas para que el panel y los gráficos nunca aparezcan vacíos.
+if (sync.fetchRecent) {
+  for (const house of houses) {
+    if (house.store.getLatest() !== null) continue;
+    const deviceKey = house.device.deviceId || house.device.id;
+    try {
+      const rows = await sync.fetchRecent(deviceKey, config.syncBackfillLimit);
+      if (rows.length) {
+        await house.store.appendMany(rows);
+        house.latest = rows[rows.length - 1];
+        log.info(`«${house.device.name}»: historial recuperado de Supabase (${rows.length} lecturas)`);
+      } else {
+        log.info(`«${house.device.name}»: Supabase aún no tiene lecturas para este dispositivo`);
+      }
+    } catch (err) {
+      log.warn(`«${house.device.name}»: no se pudo recuperar historial de Supabase — ${err.message}`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- historial demo (siembra)
 if (config.demo) {
   for (const house of houses) {
@@ -199,6 +222,24 @@ async function tickOnce(house) {
         `${house.device.name}: cuota de API agotada (${res.error.code}); ` +
           `próximo intento en ${Math.round(house.delay / 60000)} min`
       );
+      // Sin cuota y sin telemetría en memoria: intentamos mostrarla desde Supabase.
+      if (!house.latest && sync.fetchRecent && !house.backfillTried) {
+        house.backfillTried = true;
+        try {
+          const rows = await sync.fetchRecent(
+            house.device.deviceId || house.device.id,
+            Math.min(config.syncBackfillLimit, 1000)
+          );
+          if (rows.length) {
+            await house.store.appendMany(rows);
+            house.latest = rows[rows.length - 1];
+            ws.emitReading(house.device.id, house.latest);
+            log.info(`${house.device.name}: última telemetría recuperada de Supabase (${rows.length} lecturas)`);
+          }
+        } catch (err) {
+          log.warn(`${house.device.name}: respaldo de Supabase no disponible — ${err.message}`);
+        }
+      }
     } else {
       markPoll(false, res.error.message);
       if (res.error?.code === 1004) {
