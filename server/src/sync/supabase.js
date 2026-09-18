@@ -24,6 +24,13 @@ const toNumberOrNull = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** Mensaje de error de red con la causa concreta (ENOTFOUND, ECONNREFUSED, TLS…). */
+const netError = (err) => {
+  const cause = err?.cause;
+  const detail = cause?.code || cause?.message || '';
+  return detail ? `${err.message} [${detail}]` : err.message;
+};
+
 /** Fila de PostgREST/Postgres → snapshot normalizado. */
 export function rowToSnapshot(row) {
   const snapshot = {
@@ -60,7 +67,12 @@ export function createSupabaseClient({ url, key, table, log }) {
   return {
     table,
     async push(snapshot) {
-      const res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(rowOf(snapshot)) });
+      let res;
+      try {
+        res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(rowOf(snapshot)) });
+      } catch (err) {
+        throw new Error(`Supabase escritura de red: ${netError(err)}`);
+      }
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`Supabase ${res.status}: ${text.slice(0, 220)}`);
@@ -68,15 +80,19 @@ export function createSupabaseClient({ url, key, table, log }) {
     },
     /** Últimas `limit` lecturas de un dispositivo, ordenadas de más antigua a más reciente. */
     async fetchRecent(deviceId, limit = 5000) {
-      const request = (columns) => {
+      const request = async (columns) => {
         const qs = new URLSearchParams();
         qs.set('device_id', `eq.${deviceId}`);
         qs.set('select', columns);
         qs.set('order', 'ts.desc');
         qs.set('limit', String(Math.max(1, limit)));
-        return fetch(`${endpoint}?${qs.toString()}`, {
-          headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
-        });
+        try {
+          return await fetch(`${endpoint}?${qs.toString()}`, {
+            headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+          });
+        } catch (err) {
+          throw new Error(`Supabase lectura de red: ${netError(err)} (${endpoint})`);
+        }
       };
 
       let res = await request(SELECT_COLUMNS);
