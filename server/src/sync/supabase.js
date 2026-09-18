@@ -12,6 +12,11 @@
 import { NUMERIC_KEYS } from '../store.js';
 
 const SELECT_COLUMNS = ['device_id', 'ts', 'source', 'online', ...NUMERIC_KEYS].join(',');
+// Columnas que existen desde la primera versión del esquema (tablas antiguas sin balance_kwh).
+const CORE_COLUMNS = [
+  'device_id', 'ts', 'source', 'online',
+  'voltage_l1', 'voltage_l2', 'voltage_l3', 'current', 'power', 'power_factor', 'temperature', 'energy_kwh',
+].join(',');
 
 const toNumberOrNull = (v) => {
   if (v === null || v === undefined || v === '') return null;
@@ -63,14 +68,22 @@ export function createSupabaseClient({ url, key, table, log }) {
     },
     /** Últimas `limit` lecturas de un dispositivo, ordenadas de más antigua a más reciente. */
     async fetchRecent(deviceId, limit = 5000) {
-      const qs = new URLSearchParams();
-      qs.set('device_id', `eq.${deviceId}`);
-      qs.set('select', SELECT_COLUMNS);
-      qs.set('order', 'ts.desc');
-      qs.set('limit', String(Math.max(1, limit)));
-      const res = await fetch(`${endpoint}?${qs.toString()}`, {
-        headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
-      });
+      const request = (columns) => {
+        const qs = new URLSearchParams();
+        qs.set('device_id', `eq.${deviceId}`);
+        qs.set('select', columns);
+        qs.set('order', 'ts.desc');
+        qs.set('limit', String(Math.max(1, limit)));
+        return fetch(`${endpoint}?${qs.toString()}`, {
+          headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+        });
+      };
+
+      let res = await request(SELECT_COLUMNS);
+      if (res.status === 400) {
+        // Probable columna inexistente (tabla creada con un esquema anterior).
+        res = await request(CORE_COLUMNS);
+      }
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`Supabase lectura ${res.status}: ${text.slice(0, 220)}`);

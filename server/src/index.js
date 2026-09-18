@@ -102,11 +102,14 @@ if (sync.fetchRecent) {
       if (rows.length) {
         await house.store.appendMany(rows);
         house.latest = rows[rows.length - 1];
+        house.backfill = { at: Date.now(), rows: rows.length, error: null };
         log.info(`«${house.device.name}»: historial recuperado de Supabase (${rows.length} lecturas)`);
       } else {
+        house.backfill = { at: Date.now(), rows: 0, error: null };
         log.info(`«${house.device.name}»: Supabase aún no tiene lecturas para este dispositivo`);
       }
     } catch (err) {
+      house.backfill = { at: Date.now(), rows: 0, error: err.message };
       log.warn(`«${house.device.name}»: no se pudo recuperar historial de Supabase — ${err.message}`);
     }
   }
@@ -222,14 +225,15 @@ async function tickOnce(house) {
         `${house.device.name}: cuota de API agotada (${res.error.code}); ` +
           `próximo intento en ${Math.round(house.delay / 60000)} min`
       );
-      // Sin cuota y sin telemetría en memoria: intentamos mostrarla desde Supabase.
-      if (!house.latest && sync.fetchRecent && !house.backfillTried) {
-        house.backfillTried = true;
+      // Sin cuota y sin telemetría en memoria: intentamos mostrarla desde Supabase
+      // (se reintenta en cada backoff de cuota mientras siga sin datos).
+      if (!house.latest && sync.fetchRecent) {
         try {
           const rows = await sync.fetchRecent(
             house.device.deviceId || house.device.id,
             Math.min(config.syncBackfillLimit, 1000)
           );
+          house.backfill = { at: Date.now(), rows: rows.length, error: null };
           if (rows.length) {
             await house.store.appendMany(rows);
             house.latest = rows[rows.length - 1];
@@ -237,6 +241,7 @@ async function tickOnce(house) {
             log.info(`${house.device.name}: última telemetría recuperada de Supabase (${rows.length} lecturas)`);
           }
         } catch (err) {
+          house.backfill = { at: Date.now(), rows: 0, error: err.message };
           log.warn(`${house.device.name}: respaldo de Supabase no disponible — ${err.message}`);
         }
       }
