@@ -47,6 +47,7 @@ export function statusPayload(ctx, house) {
     lastError: house.state.lastError,
     attempts: house.state.attempts,
     dpsCodes: house.codes || [],
+    backfill: house.backfill || null,
     sync: ctx.sync.describe(),
     serverTime: Date.now(),
     uptime: Math.round(process.uptime()),
