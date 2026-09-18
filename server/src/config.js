@@ -60,6 +60,11 @@ export const config = {
   demo: toBool(process.env.TUYA_DEMO),
   pollIntervalMs: Math.max(3000, toNum(process.env.TUYA_POLL_INTERVAL_MS, 10000)),
   energyScale: toNum(process.env.TUYA_ENERGY_SCALE, 1),
+  // Ahorro de cuota de la API de Tuya:
+  //  - el detalle del dispositivo (nombre/modelo/online) se pide cada N sondeos
+  //  - al agotarse la cuota se espera este tiempo antes de reintentar
+  detailEvery: Math.max(1, toNum(process.env.TUYA_DETAIL_EVERY, 60)),
+  quotaBackoffMs: Math.max(60_000, toNum(process.env.TUYA_QUOTA_BACKOFF_MS, 900_000)),
 
   dataDir: process.env.DATA_DIR || path.join(SERVER_ROOT, 'data'),
   retentionDays: Math.max(1, toNum(process.env.HISTORY_RETENTION_DAYS, 7)),

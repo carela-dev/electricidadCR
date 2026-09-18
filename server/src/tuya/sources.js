@@ -6,7 +6,7 @@
  * Ambas exponen  { kind, tick() }  y tick() devuelve:
  *   { ok:true, snapshot, meta?, codes? }
  *   { ok:true, offline:true, meta, codes }   (dispositivo sin conexión)
- *   { ok:false, error, fatal? }
+ *   { ok:false, error, fatal?, quota? }      (quota=true → cuota de API agotada)
  */
 import { normalizeStatus } from './normalize.js';
 import { TuyaApiError } from './client.js';
@@ -15,8 +15,11 @@ import { codeLabel } from './dps.js';
 const round = (n, d = 2) => Number(n.toFixed(d));
 const noise = (amp) => (Math.random() - 0.5) * 2 * amp;
 
+/** Códigos de Tuya que indican cuota de API agotada / servicio suspendido. */
+export const QUOTA_ERROR_CODES = new Set([28841004, 28841013, 28841008]);
+
 // ---------------------------------------------------------------- Tuya real
-export function createTuyaSource({ client, deviceId, energyScale, log }) {
+export function createTuyaSource({ client, deviceId, energyScale, detailEvery = 60, log }) {
   let meta = null;
   let detailCounter = 0;
   let codes = [];
@@ -36,6 +39,9 @@ export function createTuyaSource({ client, deviceId, energyScale, log }) {
           if (err.code === 2010) {
             return { ok: false, fatal: true, error: err };
           }
+          if (QUOTA_ERROR_CODES.has(err.code)) {
+            return { ok: false, quota: true, error: err };
+          }
         }
         return { ok: false, error: err };
       }
@@ -51,8 +57,9 @@ export function createTuyaSource({ client, deviceId, energyScale, log }) {
         codes = newCodes;
       }
 
-      // El detalle (nombre/modelo/online) solo se consulta de vez en cuando.
-      if (detailCounter++ % 6 === 0) {
+      // El detalle (nombre/modelo/online) se consulta muy de vez en cuando:
+      // cada llamada cuenta para la cuota de la API de Tuya.
+      if (detailCounter++ % Math.max(1, detailEvery) === 0) {
         try {
           meta = await client.getDeviceDetail(deviceId);
         } catch (err) {

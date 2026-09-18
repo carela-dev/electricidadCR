@@ -73,6 +73,7 @@ for (let i = 0; i < devices.length; i += 1) {
       client,
       deviceId: device.deviceId,
       energyScale: config.energyScale,
+      detailEvery: config.detailEvery,
       log: createLogger(`tuya:${device.id}`),
     });
   } else {
@@ -184,6 +185,20 @@ async function tickOnce(house) {
         markPoll(true);
         house.delay = config.pollIntervalMs;
       }
+    } else if (res.quota) {
+      // Cuota de la API de Tuya agotada: espera larga (no gastar/martillear la API)
+      // y aviso en lenguaje claro para el panel.
+      markPoll(
+        false,
+        'Cuota de la API de Tuya agotada (plan Trial de IoT Core). El panel se actualizará solo ' +
+          'cuando Tuya renueve la cuota o al ampliar el plan; mientras tanto se muestra la última ' +
+          'telemetría válida. Consejo: sube TUYA_POLL_INTERVAL_MS (p. ej. 300000) para gastar menos.'
+      );
+      house.delay = config.quotaBackoffMs;
+      log.warn(
+        `${house.device.name}: cuota de API agotada (${res.error.code}); ` +
+          `próximo intento en ${Math.round(house.delay / 60000)} min`
+      );
     } else {
       markPoll(false, res.error.message);
       if (res.error?.code === 1004) {
@@ -192,6 +207,8 @@ async function tickOnce(house) {
         log.error(`${house.device.name}: permiso denegado (1106) — autoriza la API «IoT Core».`);
       } else if (res.error?.code === 2010) {
         log.error(`${house.device.name}: dispositivo inexistente (2010) — revisa su deviceId.`);
+      } else if (res.error?.code === 28841107) {
+        log.error(`${house.device.name}: data center suspendido (28841107) — habilítalo en iot.tuya.com.`);
       }
       log.warn(`${house.device.name}: sondeo fallido — ${res.error.message}`);
       house.delay = Math.min(Math.max((house.delay || config.pollIntervalMs) * 2, config.pollIntervalMs), MAX_BACKOFF_MS);

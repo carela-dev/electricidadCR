@@ -163,6 +163,13 @@ export default function App() {
             El sondeo del medidor reporta un problema: <b>{status.lastError}</b>
             {status.lastPollAt ? ` (último intento ${clock(status.lastPollAt)})` : ''}. La interfaz sigue
             mostrando la última telemetría válida.
+            {/cuota/i.test(status.lastError) && (
+              <>
+                {' '}
+                Puedes reducirlo subiendo <code>TUYA_POLL_INTERVAL_MS</code> (por ejemplo{' '}
+                <code>300000</code> = 5 min) en Render, o ampliando tu plan de IoT Core en iot.tuya.com.
+              </>
+            )}
           </span>
         </div>
       )}

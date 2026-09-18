@@ -141,6 +141,8 @@ Particularidades de estos dispositivos:
 | `TUYA_DEMO` | — | `1` → simulador de 2 fases sin hardware |
 | `TUYA_POLL_INTERVAL_MS` | `10000` | Intervalo de sondeo (mín. 3000) |
 | `TUYA_ENERGY_SCALE` | `1` | Escala del contador (`0.001` si tu medidor reporta Wh) |
+| `TUYA_DETAIL_EVERY` | `60` | Detalle del dispositivo cada N sondeos (ahorra cuota de API) |
+| `TUYA_QUOTA_BACKOFF_MS` | `900000` | Espera tras agotarse la cuota de la API (15 min) |
 | `DATA_DIR` | `server/data` | Carpeta del historial NDJSON |
 | `HISTORY_RETENTION_DAYS` | `7` | Días conservados en el historial local |
 | `SYNC_SUPABASE_URL` | — | URL del proyecto Supabase |
@@ -280,6 +282,7 @@ tuya/
 | Síntoma | Causa probable / solución |
 | --- | --- |
 | Log `sign invalid (1004)` | Revisa `TUYA_CLIENT_ID` / `TUYA_CLIENT_SECRET` |
+| Error `28841004 IoT Core trial quota is exhausted` | Se agotó la cuota del plan Trial de Tuya: sube `TUYA_POLL_INTERVAL_MS` (p. ej. `300000`) o amplía el plan en iot.tuya.com. Ver §12.8 |
 | Log `28841107 No permission… data center is suspended` o `2007 cross-region` | `TUYA_REGION` no coincide con el centro de datos habilitado en tu proyecto (Cloud → Data Center). Prueba `us`, `eu`, `in` o `cn` |
 | Log `permission deny (1106)` | El proyecto no tiene la API **IoT Core** autorizada o el dispositivo no está vinculado |
 | Log `device not exist (2010)` | `TUYA_DEVICE_ID` incorrecto |
@@ -291,6 +294,27 @@ tuya/
 | El navegador no recibe datos | Verifica el proxy de Vite (`/api` y `/socket.io` → `:4000`) en `web/vite.config.js` |
 
 ---
+
+### 12.8 Cuotas de la API de Tuya (seguir gratis)
+
+El plan **Trial de IoT Core** incluye un paquete limitado de llamadas (≈26 000 según la
+documentación de Tuya). Cada sondeo de cada casa consume 1 llamada, más 1 de detalle cada
+`TUYA_DETAIL_EVERY` sondeos. Referencia con **2 casas**:
+
+| `TUYA_POLL_INTERVAL_MS` | Ritmo | Llamadas/mes aprox. |
+| --- | --- | --- |
+| `10000` | tiempo real | ≈ 518 000 ❌ |
+| `120000` | equilibrado | ≈ 43 000 |
+| `300000` | **cabe en el paquete Trial** | **≈ 17 500** ✅ |
+
+Si Tuya responde `28841004 (IoT Core trial quota is exhausted)`, el backend:
+
+- espera `TUYA_QUOTA_BACKOFF_MS` (15 min por defecto) antes de reintentar, sin gastar más cuota;
+- muestra un aviso claro en el panel y conserva la última telemetría válida;
+- se recupera automáticamente cuando la cuota se renueva o al ampliar el plan.
+
+Para tiempo real con muchas casas y sin depender de la cuota, las alternativas son la
+suscripción de mensajes MQTT de Tuya o la lectura local por LAN (tinytuya/ESPHome).
 
 Licencia MIT. Proyecto de ejemplo sin afiliación con Tuya ni con el fabricante del LY-C100A.
 
