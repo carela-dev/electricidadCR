@@ -1,0 +1,38 @@
+{
+  "ingestUrl": "https://electricidad-cr.onrender.com/api/ingest",
+  "intervalSeconds": 45,
+  "houses": [
+    {
+      "id": "casa4",
+      "name": "Casa 4",
+      "deviceId": "eb7be0c43951c24d39olwx",
+      "ip": "192.168.1.50",
+      "localKey": "PON_AQUI_LA_LOCAL_KEY_DE_CASA_4",
+      "version": "3.3",
+      "ingestToken": "PON_AQUI_EL_TOKEN_DE_INGESTA_DE_CASA_4",
+      "dpMap": {
+        "1": "total_forward_energy",
+        "6": "phase_a",
+        "13": "balance_energy",
+        "16": "switch",
+        "18": "temp_current"
+      }
+    },
+    {
+      "id": "casa2",
+      "name": "Casa 2",
+      "deviceId": "eb4904da7a42268b748ja0",
+      "ip": "192.168.1.51",
+      "localKey": "PON_AQUI_LA_LOCAL_KEY_DE_CASA_2",
+      "version": "3.3",
+      "ingestToken": "PON_AQUI_EL_TOKEN_DE_INGESTA_DE_CASA_2",
+      "dpMap": {
+        "1": "total_forward_energy",
+        "6": "phase_a",
+        "13": "balance_energy",
+        "16": "switch",
+        "18": "temp_current"
+      }
+    }
+  ]
+}

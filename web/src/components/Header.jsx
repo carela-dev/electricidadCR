@@ -24,6 +24,10 @@ export default function Header({ device, status, latest, socketConnected, now, t
       <Chip dot tone="ok" title="Conectado a la Tuya Cloud API">
         <WifiIcon size={12} /> Tuya Cloud · <b>{shortDeviceId(device?.id || '')}</b>
       </Chip>
+    ) : source === 'local' ? (
+      <Chip dot tone="ok" title="Lecturas locales por red LAN (sin nube ni cuota de Tuya)">
+        🏠 Local · <b>sin cuota de Tuya</b>
+      </Chip>
     ) : (
       <Chip dot tone="warn" title="Configura credenciales o usa TUYA_DEMO=1">
         Sin fuente de datos

@@ -168,6 +168,8 @@ TUYA_DEVICES=[{"id":"casa4","name":"Casa 4","deviceId":"eb7be0c43951c24d39olwx",
 ```
 
 - Cada casa recibe su **sondeo independiente**, su **historial** (`data/<id>.ndjson`) y su estado.
+- `ingestToken` (opcional) habilita la **ingesta desde un agente local** (ver §13): el
+  agente envía las lecturas por LAN a `POST /api/ingest` con ese token.
 - `pin` (opcional) **bloquea la casa**: los endpoints de datos y el canal en vivo exigen ese PIN
   (cabeceras `X-House-Id` / `X-House-Pin`), de modo que cada dueño solo ve su casa.
 - La interfaz muestra un **selector de casas** en la cabecera; cada navegador desbloquea las
@@ -321,6 +323,83 @@ Si Tuya responde `28841004 (IoT Core trial quota is exhausted)`, el backend:
 
 Para tiempo real con muchas casas y sin depender de la cuota, las alternativas son la
 suscripción de mensajes MQTT de Tuya o la lectura local por LAN (tinytuya/ESPHome).
+
+## 13. Lectura local (agente LAN) — sin cuota de Tuya
+
+Cuando la cuota de la API de Tuya se agota (plan Trial) o quieres independizarte de la
+nube, puedes leer los breakers **por red local** con un pequeño agente. Sirve el mismo
+agente en **Android (Termux)** y en **Raspberry Pi** (Zero 2 W, 3 A+, 4, 5…).
+
+```
+Breaker ──(WiFi/LAN)──► Agente (Termux / Raspberry Pi) ──POST /api/ingest──► Render
+                                                                              │
+                                                        panel + PIN + Supabase ◄┘
+```
+
+### 13.1 Requisitos
+
+1. La **`local_key`** y la **IP local** de cada breaker (la clave no caduca).
+   - Con cuota disponible: `python3 -m tinytuya wizard` (el más fácil).
+   - Sin cuota: `tuya-uncover` o el método QR de *tuya-local* (no necesitan cuenta de
+     desarrollador).
+2. Un **token de ingesta** por casa. Añádelo a `TUYA_DEVICES` en Render:
+   `"ingestToken": "un-token-largo-y-secreto"`.
+3. El agente en la misma red WiFi/LAN que los breakers.
+
+### 13.2 Puesta en marcha (Android con Termux)
+
+```bash
+# Instala Termux desde F-Droid (la versión de Play Store está obsoleta)
+pkg update && pkg install python
+pip install tinytuya
+termux-wake-lock            # evita que Android suspenda el proceso
+# Configuración: copia agent/config.example.json a agent/config.json y rellénalo
+python3 agent/local_agent.py discover   # muestra los DP reales (id → valor)
+python3 agent/local_agent.py run        # bucle continuo de envío
+```
+Ajustes recomendados en el móvil: batería **sin optimización** para Termux, WiFi siempre
+activo, teléfono **enchufado** y pantalla apagada.
+
+### 13.3 Raspberry Pi (recomendado a largo plazo)
+
+```bash
+sudo apt update && sudo apt install -y python3-pip
+pip3 install tinytuya
+# copia la carpeta agent/ y tu config.json
+python3 agent/local_agent.py discover
+python3 agent/local_agent.py run
+```
+
+Servicio `systemd` para que arranque solo y se reinicie si falla (`/etc/systemd/system/tuya-agent.service`):
+
+```ini
+[Unit]
+Description=Agente local Tuya (breakers)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/agent/local_agent.py run
+WorkingDirectory=/home/pi/agent
+Restart=always
+RestartSec=10
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now tuya-agent
+```
+
+### 13.4 Notas
+
+- Los DP **numéricos** cambian según el firmware: usa `discover` para identificar cada
+  uno y rellena `dpMap` en `config.json` (los del ejemplo son de un modelo similar).
+- En cuanto una casa recibe su primera lectura local, el backend **deja de sondear Tuya**
+  para esa casa (cuota = 0) y el panel muestra la etiqueta **“🏠 Local · sin cuota de Tuya”**.
+- Los tokens de ingesta son secretos: solo en `config.json` del dispositivo y en las
+  variables de Render; nunca en el repositorio.
 
 Licencia MIT. Proyecto de ejemplo sin afiliación con Tuya ni con el fabricante del LY-C100A.
 

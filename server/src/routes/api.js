@@ -13,6 +13,7 @@
  */
 import { Router } from 'express';
 import { devices, getDeviceById } from '../config.js';
+import { normalizeStatus } from '../tuya/normalize.js';
 import { devicePayload, housesPayload, statusPayload } from '../payloads.js';
 
 const asyncHandler = (fn) => (req, res, next) => fn(req, res, next).catch(next);
@@ -108,6 +109,48 @@ export function createApiRouter(ctx) {
       const points = Math.min(2000, Math.max(10, Math.trunc(Number(req.query.points) || 600)));
       const { total, points: serie } = house.store.query({ from, to, maxPoints: points });
       res.json({ ok: true, data: { house: house.device.id, from, to, total, points: serie } });
+    })
+  );
+
+  /**
+   * Ingesta de lecturas desde un agente local (LAN).
+   *   POST /api/ingest
+   *   Header: X-Ingest-Token: <token de la casa>
+   *   Body:   { "house": "casa4", "ts": 1234567890,
+   *             "dps": { "phase_a": "…", "balance_energy": 4, … } }
+   * El backend normaliza los DPs con la misma lógica que el sondeo en la nube.
+   */
+  router.post(
+    '/ingest',
+    asyncHandler(async (req, res) => {
+      const token = String(req.headers['x-ingest-token'] || (req.body && req.body.token) || '');
+      const device = devices.find((d) => d.ingestToken && safeEqual(token, d.ingestToken));
+      if (!device) {
+        res.status(401).json({ ok: false, error: 'Token de ingesta inválido' });
+        return;
+      }
+      const body = req.body || {};
+      if (body.house && String(body.house) !== device.id) {
+        res.status(403).json({ ok: false, error: 'El token no corresponde a esa casa' });
+        return;
+      }
+      const dps = body.dps || body.status;
+      if (!dps || typeof dps !== 'object' || Array.isArray(dps)) {
+        res.status(400).json({ ok: false, error: 'Falta el objeto "dps" con los data points' });
+        return;
+      }
+      const statusArr = Object.entries(dps).map(([code, value]) => ({ code, value }));
+      const snapshot = normalizeStatus(statusArr, {
+        device_id: device.deviceId || device.id,
+        source: 'local',
+        energyScale: ctx.config.energyScale,
+        online: true,
+      });
+      const ts = Number(body.ts);
+      if (Number.isFinite(ts) && ts > 1e12) snapshot.ts = ts;
+
+      await ctx.ingest(getHouse(ctx, device), snapshot);
+      res.json({ ok: true, house: device.id, ts: snapshot.ts });
     })
   );
 

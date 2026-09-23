@@ -82,8 +82,9 @@ export default function App() {
   const sourceName =
     status?.mode === 'demo' ? 'Demo (simulación)'
       : status?.mode === 'tuya' ? 'Tuya Cloud API'
-        : activeHouse?.mode === 'none' ? 'Sin datos configurados'
-          : 'Sin configurar';
+        : status?.mode === 'local' ? 'Lectura local (LAN)'
+          : activeHouse?.mode === 'none' ? 'Sin datos configurados'
+            : 'Sin configurar';
 
   // ------------------------------------------------------------ interacción casa
   const handleSelectHouse = (house) => {

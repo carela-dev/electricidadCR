@@ -88,9 +88,10 @@ const regionOf = (d) => String(d.region || config.region).toLowerCase();
 
 /**
  * Registro de casas/medidores. Cada entrada:
- *   { id, name, deviceId, pin?, clientId?, secret?, region? }
+ *   { id, name, deviceId, pin?, clientId?, secret?, region?, ingestToken? }
  * Se define con la variable TUYA_DEVICES (JSON) — útil para varias casas.
- * Si no existe, se mantiene el modo clásico de un solo dispositivo.
+ * `ingestToken` habilita el envío de lecturas desde un agente local (LAN).
+ * Si no existe TUYA_DEVICES, se mantiene el modo clásico de un solo dispositivo.
  */
 export function resolveDevices() {
   const raw = clean(process.env.TUYA_DEVICES);
@@ -112,6 +113,7 @@ export function resolveDevices() {
       clientId: clean(d.clientId || d.accessId),
       secret: clean(d.secret || d.accessSecret),
       region: regionOf(d),
+      ingestToken: clean(d.ingestToken || d.ingest_token),
     }));
   }
 
@@ -128,6 +130,7 @@ export function resolveDevices() {
       clientId: '',
       secret: '',
       region: config.region,
+      ingestToken: clean(process.env.TUYA_INGEST_TOKEN),
     },
   ];
 }

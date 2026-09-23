@@ -172,6 +172,34 @@ const io = new Server(server, {
 const ws = attachSocket(io, ctx);
 log.info('Socket.IO listo (websocket + polling, autenticado por casa)');
 
+// ---------------------------------------------------------------- ingesta local (LAN)
+/**
+ * Aplica una lectura recibida de un agente local: la guarda, la emite por
+ * Socket.IO, la sincroniza y —la primera vez— detiene el sondeo a Tuya Cloud
+ * de esa casa (así ya no consume cuota de API).
+ */
+ctx.ingest = async (house, snapshot) => {
+  house.latest = snapshot;
+  await house.store.append(snapshot);
+  ws.emitReading(house.device.id, snapshot);
+  sync.push(snapshot);
+  house.state.lastPollAt = snapshot.ts;
+  house.state.lastPollOk = true;
+  house.state.lastError = null;
+
+  if (house.kind !== 'local') {
+    house.kind = 'local';
+    if (house.timer) {
+      clearTimeout(house.timer);
+      house.timer = null;
+    }
+    if (house.source) {
+      house.source = null;
+      log.info(`«${house.device.name}»: lectura local activa — se detiene el sondeo a Tuya Cloud`);
+    }
+  }
+};
+
 // ---------------------------------------------------------------- sondeo por casa
 const MAX_BACKOFF_MS = 120_000;
 
