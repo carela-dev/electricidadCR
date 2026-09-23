@@ -21,3 +21,6 @@ npm-debug.log*
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Configuración del agente local (contiene local_key y tokens: NO subir)
+agent/config.json
